@@ -1,0 +1,2 @@
+#!/bin/sh
+cc -o sum_overlaps -O3 -lm -Wall sum_overlaps.c
