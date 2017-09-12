@@ -1,0 +1,5 @@
+cc -O3 -lm -o sim_model sim_model.c -Wall random_x.c
+cc -O3 -lm -o sim_modelXP sim_modelXP.c -Wall random_x.c
+
+
+
