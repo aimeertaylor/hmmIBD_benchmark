@@ -3,7 +3,7 @@
 # Since, it is not possible to specify comparisons to analyse under isoRelate, 
 # all possible pairwise comparisons of the children and their parents were analysed. 
 # It is possible to filter by comparisons under hmmIBD, but for consistency with isoRelate 
-# all of the above sample comparisons are also analysed under hmmIBD
+# all of the above sample comparisons are also analysed under hmmIBD.
 ############################################################################
 rm(list = ls())
 library(isoRelate) # load isoRelate library (we reinstalled on Aug 9th 2017)

@@ -3,10 +3,6 @@ title: "Appendix S3: comparative study of isoRelate and hmmIBD"
 output: pdf_document
 ---
 
-<!-- To-do:  -->
-<!-- MCMC ref from someone at Sanger -->
-<!-- Discuss Thies again -->
-
 ## Methods
 
 ### Summary of files and variables used
