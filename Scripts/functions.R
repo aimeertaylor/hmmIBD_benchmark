@@ -1,6 +1,5 @@
 #######################################################################
-# Functions to recombine two parent genomes into a chimeric child     #                                  #
-# Aimee Taylor                                                        #
+# Functions to recombine two parent genomes into a chimeric child     #                                  
 #######################################################################
 recombine <- function(trio, rho, nchrom){
   

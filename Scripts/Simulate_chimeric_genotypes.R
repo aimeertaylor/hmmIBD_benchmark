@@ -4,8 +4,6 @@
 # 2) calculate, plot and save pairwise IBS per site; 
 # 3) extract unrelated sample pair names per site and save; 
 # 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers;
-# June 2017                                                                
-# Aimee Taylor      
 ################################################################################
 
 # Clear workspace and load libraries/functions
