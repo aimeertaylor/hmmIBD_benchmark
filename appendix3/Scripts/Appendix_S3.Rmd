@@ -50,19 +50,19 @@ for(site in sites){
 
 ### Simulation of artificially recombined data 
 
-We used artificially recombined data to compare results generated under hmmIBD and isoRelate to a known truth that was not generated under either model. Artificially recombined data were based on the MalariaGen Pf3k samples, pilot release 5.0 (https://www.malariagen.net/projects/pf3k). These data were filtered prior to their use in this comparative study, leaving only single nucleotide polymorphisms (SNPs) in the accessible genome (as defined by Manske M, et al. Nature 2012), and those with a high probability of being monogenomic (ad defined by DEploid from Zhu SJ, Almagro-garcia J, Mcvean G. BioRxiv. 2017). The filtered data can be found in $\texttt{pf3k\_data}$. Using $\texttt{Simulate\_chimeric\_genotypes.R}$ we:
+We used artificially recombined data to compare results generated under hmmIBD and isoRelate to a known truth that was not generated under either model. Artificially recombined data were based on the MalariaGen Pf3k samples, pilot release 5.0 (https://www.malariagen.net/projects/pf3k). These data were filtered prior to their use in this comparative study, leaving only single nucleotide polymorphisms (SNPs) in the accessible genome (as defined by Manske M, et al. Nature 2012), and those with a high probability of being monogenomic (as defined by DEploid from Zhu SJ, Almagro-garcia J, Mcvean G. BioRxiv. 2017). The filtered data can be found in $\texttt{pf3k\_data}$. Using $\texttt{Simulate\_chimeric\_genotypes.R}$ we:
 
 1.  Extracted samples from sites with `r min_num` or more samples (Thies, Kassena, Pursat). 
 2.  For each site, removed multiallelic SNPs (unsupported by isoRelate) and those with minor allele frequency $\leq$ `r MAF`, leaving `r nsnps` SNPs per sample from `r names(nsnps)`, respectively. 
 3.  Calculated and saved allele frequencies and data sets based on the non recombined data to ensure frequencies were not based on chimeric samples.
 4.  For each pairwise comparison within a site, calculated the average identity-by-state, IBS (one minus the genome-wide average SNP difference), and plotted. 
 5.  Extracted unrelated pairs (those with IBS < `r cutoff*100` percentile of the empirical IBS distribution). 
-6.  Artificially recombined each unrelated sample pair to create a "chimeric child". Recombination was simulated by sampling crossover positions (in base pairs) from an exponential distribution with mean equal to the recombination rate (in M/bp) (see $\texttt{functions.R}$). 
+6.  Artificially recombined each unrelated sample pair to create a "chimeric child". Recombination was simulated by sampling crossover positions (in base pairs, bp) from an exponential distribution with mean equal to the recombination rate in Morgans, M, per bp (see $\texttt{functions.R}$). 
 7. Recorded the parent of each DNA segment in each chimeric child, and plotted the number of crossovers per chromosome averaged over all the chimeric children per site.  
 
 <!-- UPDATE THIS SECTION WITH PARAMETERS USED TO RUN SH SCRIPTS -->
 ### Parameter values used to run the HMMs
-For each site, IBD segments between `r n_children_to_analyse` "chimeric children" and each of their two parents were inferred under isoRelate and hmmIBD using the parameter values listed in the table below, some of which differ to the defaults provided in order to more closely match the two methods. Timing experiments were done separately on the first `r n_timing_samples_to_run` samples per site (including non-recombined parents and chimeric children), and repeated `r n_timing_repetition` times on a MacBook Air laptop with 1.7 GHz Intel Core i7 processor.  
+For each site, IBD segments between `r n_children_to_analyse` "chimeric children" and each of their two parents were inferred under isoRelate and hmmIBD using the parameter values listed in the table below. Some of the parameter values differ to the defaults provided in order to more closely match the two methods. Timing experiments were done separately on the first `r n_timing_samples_to_run` samples per site (including non-recombined parents and chimeric children), and repeated `r n_timing_repetition` times on a MacBook Air laptop with 1.7 GHz Intel Core i7 processor.  
 
 Parameter |  isoRelate | hmmIBD
 ---------------------------------------------------------------- | ----------  | ----------
@@ -73,7 +73,7 @@ minimum length (bp) per segment | `r minimum_length_bp` | NA
 Minimum marker spacing (bp) | NA | 0
 Minimum informative sites per genome | NA | 0  
 
-Table: Specified parameter values. NA denotes not applicable. $\dagger$In isoRelate, the "recombination rate" is a function of distance in Morgans (M). The equivalent fixed rate in M per base pair (bp) for hmmIBD was thus based on the empirical relationship between positions in bp and centimorgans provided in the png_pedmap data set of the isoRelate package. 
+Table: Specified parameter values. NA denotes not applicable. $\dagger$In isoRelate, the "recombination rate" is a function of distance in M. The equivalent fixed rate in M/bp in hmmIBD was thus based on the empirical relationship between positions in bp and centimorgans provided in the $\texttt{png_pedmap}$ data set of the isoRelate package. 
 
 ## Results
 
@@ -341,7 +341,7 @@ legend('right', legend = c('isoRelate single comparison', 'hmmIBD single compari
 
 
 
-### Illustrative assignment plots for two random pairwise comparison from Kassena
+### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
 ```{r, cache.comments = FALSE, echo = FALSE}
 site <- "Kassena"
 load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData',site))
@@ -363,7 +363,7 @@ plot_assignments(comp2)
 
 ### Estimates of numbers of generations
 
-Both methods over estimate the number of generations:
+Both methods overestimate the number of generations:
 
 ```{r, cache.comments = FALSE, echo = FALSE}
 par(mfrow = c(1,3), pty = 's')
@@ -392,6 +392,9 @@ for(site in sites){
        ylim = c(0,max(c(no_gen_hap, no_gen_iso))))
   points(1,1, pch = 20)
   abline(a = 0, b = 1)
+  legend('bottomleft', bty = 'n', pch = 20, 
+         col = c(adjustcolor(which(sites == site) + 1, alpha.f = 0.5), adjustcolor('black')),
+         legend = c('Estimate', 'Simulated truth'), cex = 0.75)
 }
 ```
 
@@ -439,7 +442,7 @@ for(site in sites){
 
 ## Summary
 
-Both isoRelate and hmmIBD are highly accurate, sensitive and specific. In addition to IBD segments, hmmIBD returns the posterior IBD proportion (a measure of relatedness that integrates over all possible IBD segment assignments). Under this present version of isoRelate, posterior proportion are not readily accessible, but many auxiliary functions for visualizing model output and assessing significance are provided. On average, hmmIBD was `r round(fold_diff, 0)` times faster in user CPU time than isoRelate.   
+Both isoRelate and hmmIBD are highly accurate, sensitive and specific. In addition to IBD segments, hmmIBD returns the posterior IBD proportion (a measure of relatedness that integrates over all possible IBD segment assignments). Under v0.1.0 of isoRelate, posterior probabilities of the IBD state are not readily accessible, but many auxiliary functions for visualizing model output and assessing significance are provided. On average, hmmIBD was `r round(fold_diff, 0)` times faster in user CPU time than isoRelate, but both perform adequately in real time.   
 
 ```{r, cache.comments = FALSE, echo = FALSE}
 summary_table <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_times_real,
@@ -471,5 +474,5 @@ summary_table <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_time
                                                  round(apply(specificity, 2, sd), 3)['hmmIBD'])))
 
 rownames(summary_table) <- c('isoRelate', 'hmmIBD') 
-kable(summary_table, caption = sprintf('Summary of average scores (standard deviations). Times correspond to %s samples on a MacBook Air with 1.7 GHz Intel Core i7 processor.', n_timing_samples_to_run))
+kable(summary_table, caption = sprintf('Summary of average scores with standard deviations in parentheses. Times correspond to %s samples on a MacBook Air with 1.7 GHz Intel Core i7 processor.', n_timing_samples_to_run))
 ```
