@@ -136,7 +136,7 @@ se_user <- apply(time_store[,,'user'], 2, sd)
 fold_diff <- mean(time_store[,'isoRelate','user']/time_store[,'hmmIBD','user'])
 ```
 ```{r, cache.comments = FALSE, echo = FALSE}
-# Define function to plot 
+# Define function to plot asignments
 plot_assignments <- function(comp){
   
   # Determin if a comparison with parent1 or parent2? 
@@ -218,145 +218,236 @@ plot_assignments <- function(comp){
 }
 ```
 
+```{r, cache.comments = FALSE, echo = FALSE}
+# Define function to extract accuracy, specificity and sensitivity
+acc_spec_sens <- function(){
+  
+  # Accuracy, sensitivity and specificity stores 
+  accuracy <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
+                    dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
+  sensitivity <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
+                       dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
+  specificity <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
+                       dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
+  
+  for(site in sites){
+    
+    comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
+    parent_assignment <- parent_assignment_sites[[site]] 
+    isoRelate_assignment <- isoRelate_assignment_sites[[site]] 
+    hmmIBD_assignment <- hmmIBD_assignment_sites[[site]] 
+    
+    n_snps <- nsnps[site]
+    
+    for(i in 1:length(comparisons_of_interest)){
+      
+      # Extract parent of comparison
+      samples <- strsplit(comparisons_of_interest[i], ' ')[[1]]
+      parent <- sprintf('parent%s', which(strsplit(samples[1], split = ":")[[1]] == samples[2]))
+      simulated <- parent_assignment[,strsplit(comparisons_of_interest[i], split = ' ')[[1]][1]]
+      positive_simulated <- sum(simulated == parent)
+      negative_simulated <- sum(simulated != parent)
+      
+      # Calculate accuracy isoRelate (not counting NAs)
+      inferred_iso <- isoRelate_assignment[,comparisons_of_interest[i]]
+      true_positive_iso <- sum(simulated == inferred_iso, na.rm = TRUE)
+      true_negative_iso <- sum((simulated != parent) & (inferred_iso == 'DBD'), na.rm = TRUE) 
+      accuracy[i, 'isoRelate', site] <- (true_positive_iso + true_negative_iso)/n_snps  
+      
+      # Calculate accuracy hmmIBD (not counting NAs)
+      inferred_hap <- hmmIBD_assignment[,comparisons_of_interest[i]]
+      true_positive_hap <- sum(simulated == inferred_hap, na.rm = TRUE)
+      true_negative_hap <- sum((simulated != parent) & (inferred_hap == 'DBD'), na.rm = TRUE) 
+      accuracy[i, 'hmmIBD', site] <- (true_positive_hap + true_negative_hap)/n_snps  
+      
+      # Calculate Sensitivity and specificity
+      sensitivity[i, 'isoRelate', site] <- true_positive_iso/positive_simulated
+      sensitivity[i, 'hmmIBD', site] <- true_positive_hap/positive_simulated
+      specificity[i, 'isoRelate', site] <- true_negative_iso/negative_simulated
+      specificity[i, 'hmmIBD', site] <- true_negative_hap/negative_simulated
+    }
+  }
+  
+  # Summarise for plots below
+  mean_accuracy <- apply(accuracy, c(2,3), mean) 
+  mean_sensitivity <- apply(sensitivity, c(2,3), mean) 
+  mean_specificity <- apply(specificity, c(2,3), mean) 
+  
+  acc_spec_sens_list <- list(mean_accuracy = mean_accuracy, 
+                             mean_sensitivity = mean_sensitivity, 
+                             mean_specificity = mean_specificity, 
+                             accuracy = accuracy, 
+                             sensitivity = sensitivity, 
+                             specificity = specificity)
+  
+  return(acc_spec_sens_list)
+} 
+
+```
+
+```{r, cache.comments = FALSE, echo = FALSE}
+# Define function to plot accuracy, specificity and sensitivity
+plot_acc_spec_sens <- function(site){
+  
+  plot(NULL, ylim = c(0,1), xlim = c(0,1), bty = 'n', main = site, 
+       xlab = 'False positive rate (1-specificity)', 
+       ylab = 'True positive rate (sensitivity)')
+  title(sub = sprintf('Mean accuracy %s (isoRelate) %s (hmmIBD)',
+                      round(mean_accuracy[,site],4)['isoRelate'],
+                      round(mean_accuracy[,site],4)['hmmIBD']))
+  
+  points(y = sensitivity[, 'isoRelate', site], x = (1-specificity[, 'isoRelate', site]), 
+         col = adjustcolor('darkgreen', alpha.f = 0.5), pch = 20)
+  abline(h = mean_sensitivity['isoRelate', site], 
+         v = 1-mean_specificity['isoRelate', site], col = 'darkgreen', lty = 'dashed')
+  
+  points(y = sensitivity[, 'hmmIBD', site], x = (1-specificity[, 'hmmIBD', site]), 
+         col = adjustcolor('blue', alpha.f = 0.5), pch = 20)
+  abline(h = mean_sensitivity['hmmIBD', site], 
+         v = 1-mean_specificity['hmmIBD', site], col = 'blue', lty = 'dashed')
+  
+  legend('right',  
+         col = c('darkgreen', 'blue', 'darkgreen', 'blue'), pch = rep(20, 20, NA, NA), 
+         pt.cex =  c(1, 1, 0, 0), lty = c(0, 0, 2, 2), bty = 'n', cex = 0.8, 
+         legend = c('isoRelate single comparison', 
+                    'hmmIBD single comparison', 
+                    'isoRelate mean', 
+                    'hmmIBD mean'))
+}
+```
+
+```{r, cache.comments = FALSE, echo = FALSE}
+# Define function to plot generations
+plot_gen <- function(hmmIBD_output_path, IsoRelate_output_path){
+  par(mfrow = c(1,3), pty = 's')
+  for(site in sites){
+    
+    comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
+    
+    # hmmIBD
+    X <- read.table(sprintf(hmmIBD_output_path, site), header = TRUE)
+    haplo_21 <- apply(X[,c('sample2', 'sample1')], 1, paste, collapse = ' ')
+    ind <- haplo_21 %in% comparisons_of_interest 
+    no_gen_hap <- X$N_generation[ind]
+    
+    # isoRelate (ind as above since assignments have the same dimnames)
+    load(sprintf(isoRelate_output_path, site))
+    Y <- results$my_parameters
+    haplo_21 <- apply(Y[,c('iid2', 'iid1')], 1, paste, collapse = ' ')
+    ind <- haplo_21 %in% comparisons_of_interest # all in 21 (ordering)
+    no_gen_iso <- Y$m[ind] # 
+    
+    plot(x = no_gen_hap, y = no_gen_iso, bty = 'n',
+         pch = 20, col = adjustcolor(which(sites == site) + 1, alpha.f = 0.5),
+         main = site, 
+         xlab = c('hmmIBD'), 
+         ylab = c('isoRelate'), 
+         xlim = c(0,max(c(no_gen_hap, no_gen_iso))), 
+         ylim = c(0,max(c(no_gen_hap, no_gen_iso))))
+    points(1,1, pch = 20)
+    abline(a = 0, b = 1)
+    legend('bottomright', bty = 'n', pch = 20, 
+           col = c(adjustcolor(which(sites == site) + 1, alpha.f = 0.5), adjustcolor('black')),
+           legend = c('Estimate', 'Simulated truth'), cex = 0.75)
+  }
+}
+```
+
+```{r, cache.comments = FALSE, echo = FALSE}
+# Define function to plot posterior probability
+plot_pos <- function(hmmIBD_output_path){
+  
+  par(mfrow = c(1,3), pty = 's')
+  for(site in sites){
+    
+    comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
+    parent_assignment <- parent_assignment_sites[[site]] 
+    
+    # hmmIBD
+    X <- read.table(sprintf(hmmIBD_output_path, site), header = TRUE)
+    haplo_21 <- apply(X[,c('sample2', 'sample1')], 1, paste, collapse = ' ')
+    rownames(X) <- haplo_21
+    ind <- haplo_21 %in% comparisons_of_interest # all in 21 (not that %in% doesn't conserve order)
+    post_prob_hap <- X[ind,][comparisons_of_interest, 'fract_sites_IBD'] # closest thing
+    
+    # Simulated 
+    positive_simulated <- rep(NA, length(comparisons_of_interest))
+    names(positive_simulated) <- comparisons_of_interest
+    n_snps <- nsnps[site]
+    
+    for(i in comparisons_of_interest){
+      samples <- strsplit(i, ' ')[[1]]
+      parent <- sprintf('parent%s', which(strsplit(samples[1], split = ":")[[1]] == samples[2]))
+      simulated <- parent_assignment[,strsplit(i, split = ' ')[[1]][1]]
+      positive_simulated[i] <- sum(simulated == parent)
+    }
+    
+    plot(x = positive_simulated/n_snps, y = post_prob_hap, bty = 'n',
+         pch = 20, col = adjustcolor(which(sites == site) + 1, alpha.f = 0.5),
+         xlab = c('Simulated'), 
+         ylab = c('hmmIBD'), 
+         xlim = c(0,1), 
+         ylim = c(0,1))
+    
+    abline(a = 0, b = 1, lty = 'dotted')
+  }
+}
+```
+
+```{r, cache.comments = FALSE, echo = FALSE}
+# Load results for inference common across erroneous and non-erroneous children
+comparisons_of_interest_sites <- vector('list', length = length(sites))
+parent_assignment_sites <- vector('list', length = length(sites))
+names(comparisons_of_interest_sites) <- sites
+names(parent_assignment_sites) <- sites
+
+for(site in sites){
+  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData', site))
+  load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
+  comparisons_of_interest_sites[[site]] <- comparisons_of_interest
+  parent_assignment_sites[[site]] <- parent_assignment
+}
+```
 
 ## Inference based on non-erroneous chimeric children
 
 ```{r, cache.comments = FALSE, echo = FALSE}
-# Accuracy, sensitivity and specificity stores 
-accuracy <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
-                  dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
-sensitivity <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
-                     dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
-specificity <- array(dim = c(n_children_to_analyse*2, 2, length(sites)), 
-                     dimnames = list(NULL, c('isoRelate', 'hmmIBD'), sites))
+# Load results for non-erroneous chimeric children
+isoRelate_assignment_sites <- vector('list', length = length(sites))
+hmmIBD_assignment_sites <- vector('list', length = length(sites))
+names(isoRelate_assignment_sites) <- sites
+names(hmmIBD_assignment_sites) <- sites
 
 for(site in sites){
-  
-  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData',site))
   load(sprintf('../pf3k_chimeric_data/isoRelate_assignment_%s.RData', site))
   load(sprintf('../pf3k_chimeric_data/hmmIBD_assignment_%s.RData', site))
-  load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
-  
-  n_snps <- nsnps[site]
-  
-  for(i in 1:length(comparisons_of_interest)){
-    
-    # Extract parent of comparison
-    samples <- strsplit(comparisons_of_interest[i], ' ')[[1]]
-    parent <- sprintf('parent%s', which(strsplit(samples[1], split = ":")[[1]] == samples[2]))
-    simulated <- parent_assignment[,strsplit(comparisons_of_interest[i], split = ' ')[[1]][1]]
-    positive_simulated <- sum(simulated == parent)
-    negative_simulated <- sum(simulated != parent)
-    
-    # Calculate accuracy isoRelate
-    inferred_iso <- isoRelate_assignment[,comparisons_of_interest[i]]
-    true_positive_iso <- sum(simulated == inferred_iso, na.rm = TRUE)
-    true_negative_iso <- sum((simulated != parent) & (inferred_iso == 'DBD'), na.rm = TRUE) # Don't count NAs
-    accuracy[i, 'isoRelate', site] <- (true_positive_iso + true_negative_iso)/n_snps  
-    
-    # Calculate accuracy hmmIBD
-    inferred_hap <- hmmIBD_assignment[,comparisons_of_interest[i]]
-    true_positive_hap <- sum(simulated == inferred_hap, na.rm = TRUE)
-    true_negative_hap <- sum((simulated != parent) & (inferred_hap == 'DBD'), na.rm = TRUE) # Don't count NAs
-    accuracy[i, 'hmmIBD', site] <- (true_positive_hap + true_negative_hap)/n_snps  
-    
-    # Calculate Sensitivity and specificity
-    sensitivity[i, 'isoRelate', site] <- true_positive_iso/positive_simulated
-    sensitivity[i, 'hmmIBD', site] <- true_positive_hap/positive_simulated
-    specificity[i, 'isoRelate', site] <- true_negative_iso/negative_simulated
-    specificity[i, 'hmmIBD', site] <- true_negative_hap/negative_simulated
-  }
+  isoRelate_assignment_sites[[site]] <- isoRelate_assignment
+  hmmIBD_assignment_sites[[site]] <- hmmIBD_assignment
 }
 
-# Summarise for plots below
-mean_accuracy <- apply(accuracy, c(2,3), mean) # isoRelate is highly accurate (masking NAs improves but marginally)
-mean_sensitivity <- apply(sensitivity, c(2,3), mean) # Both highly sensitive
-mean_specificity <- apply(specificity, c(2,3), mean) # Haplo IBD has low power 
+# Extract accuracy, specificity and sensitivity
+mean_acc_spec_sens <- acc_spec_sens()
+attach(mean_acc_spec_sens, warn.conflicts = FALSE)
+
+# Plot
+plot_acc_spec_sens(sites[1])
+plot_acc_spec_sens(sites[2])
+plot_acc_spec_sens(sites[3])
 ```
-
-```{r, cache.comments = FALSE, echo = FALSE}
-site <- sites[1]
-plot(NULL, ylim = c(0,1), xlim = c(0,1), bty = 'n', main = site, 
-     xlab = 'False positive rate (1-specificity)', ylab = 'True positive rate (sensitivity)')
-title(sub = sprintf('Mean accuracy %s (isoRelate) %s (hmmIBD)', round(mean_accuracy[,site],4)['isoRelate'], round(mean_accuracy[,site],4)['hmmIBD']))
-
-points(y = sensitivity[, 'isoRelate', site], x = (1-specificity[, 'isoRelate', site]), 
-       col = adjustcolor('darkgreen', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['isoRelate', site], 
-       v = 1-mean_specificity['isoRelate', site], col = 'darkgreen', lty = 'dashed')
-
-points(y = sensitivity[, 'hmmIBD', site], x = (1-specificity[, 'hmmIBD', site]), 
-       col = adjustcolor('blue', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['hmmIBD', site], 
-       v = 1-mean_specificity['hmmIBD', site], col = 'blue', lty = 'dashed')
-
-legend('right', legend = c('isoRelate single comparison', 'hmmIBD single comparison', 'isoRelate mean', 'hmmIBD mean'), 
-       col = c('darkgreen', 'blue', 'darkgreen', 'blue'), pch = rep(20, 20, NA, NA), 
-       pt.cex =  c(1, 1, 0, 0), lty = c(0, 0, 2, 2), bty = 'n', cex = 0.8)
-```
-
-
-
-```{r, cache.comments = FALSE, echo = FALSE}
-# Pursat
-site <- sites[2]
-plot(NULL, ylim = c(0,1), xlim = c(0,1), bty = 'n', main = site,
-     xlab = 'False positive rate (1-specificity)', ylab = 'True positive rate (sensitivity)')
-title(sub = sprintf('Mean accuracy %s (isoRelate) %s (hmmIBD)', round(mean_accuracy[,site],4)['isoRelate'], round(mean_accuracy[,site],4)['hmmIBD']))
-
-points(y = sensitivity[, 'isoRelate', site], x = (1-specificity[, 'isoRelate', site]), 
-       col = adjustcolor('darkgreen', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['isoRelate', site], 
-       v = 1-mean_specificity['isoRelate', site], col = 'darkgreen', lty = 'dashed')
-
-points(y = sensitivity[, 'hmmIBD', site], x = (1-specificity[, 'hmmIBD', site]), 
-       col = adjustcolor('blue', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['hmmIBD', site], 
-       v = 1-mean_specificity['hmmIBD', site], col = 'blue', lty = 'dashed')
-
-legend('right', legend = c('isoRelate single comparison', 'hmmIBD single comparison', 'isoRelate mean', 'hmmIBD mean'), 
-       col = c('darkgreen', 'blue', 'darkgreen', 'blue'), pch = rep(20, 20, NA, NA), 
-       pt.cex =  c(1, 1, 0, 0), lty = c(0, 0, 2, 2), bty = 'n', cex = 0.8)
-```
-
-
-
-```{r, cache.comments = FALSE, echo = FALSE}
-site <- sites[3]
-plot(NULL, ylim = c(0,1), xlim = c(0,1), bty = 'n', main = site,
-     xlab = 'False positive rate (1-specificity)', ylab = 'True positive rate (sensitivity)')
-title(sub = sprintf('Mean accuracy %s (isoRelate) %s (hmmIBD)', round(mean_accuracy[,site],4)['isoRelate'], round(mean_accuracy[,site],4)['hmmIBD']))
-
-points(y = sensitivity[, 'isoRelate', site], x = (1-specificity[, 'isoRelate', site]),
-       col = adjustcolor('darkgreen', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['isoRelate', site],
-       v = 1-mean_specificity['isoRelate', site], col = 'darkgreen', lty = 'dashed')
-
-points(y = sensitivity[, 'hmmIBD', site], x = (1-specificity[, 'hmmIBD', site]),
-       col = adjustcolor('blue', alpha.f = 0.5), pch = 20)
-abline(h = mean_sensitivity['hmmIBD', site],
-       v = 1-mean_specificity['hmmIBD', site], col = 'blue', lty = 'dashed')
-
-legend('right', legend = c('isoRelate single comparison', 'hmmIBD single comparison', 'isoRelate mean', 'hmmIBD mean'),
-       col = c('darkgreen', 'blue', 'darkgreen', 'blue'), pch = rep(20, 20, NA, NA),
-       pt.cex =  c(1, 1, 0, 0), lty = c(0, 0, 2, 2), bty = 'n', cex = 0.8)
-```
-
 
 
 
 ### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
-```{r, cache.comments = FALSE, echo = FALSE}
-site <- "Kassena"
-load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData',site))
-load(sprintf('../pf3k_chimeric_data/isoRelate_assignment_%s.RData',site))
-load(sprintf('../pf3k_chimeric_data/hmmIBD_assignment_%s.RData',site))
-load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData',site))
 
+```{r, cache.comments = FALSE, echo = FALSE}
 set.seed(1)
+site <- "Kassena"
+comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
+parent_assignment <- parent_assignment_sites[[site]] 
+isoRelate_assignment <- isoRelate_assignment_sites[[site]] 
+hmmIBD_assignment <- hmmIBD_assignment_sites[[site]] 
 comp1 <- sample(comparisons_of_interest, 1)
 plot_assignments(comp1)
-
 comp2 <- sample(comparisons_of_interest, 1)
 plot_assignments(comp2)
 ```
@@ -367,76 +458,15 @@ plot_assignments(comp2)
 Both methods overestimate the number of generations:
 
 ```{r, cache.comments = FALSE, echo = FALSE}
-par(mfrow = c(1,3), pty = 's')
-for(site in sites){
-  
-  # hmmIBD
-  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData',site))
-  X <- read.table(sprintf('../pf3k_chimeric_data/hmmIBD_%s.hmm_fract.txt', site), header = TRUE)
-  haplo_21 <- apply(X[,c('sample2', 'sample1')], 1, paste, collapse = ' ')
-  ind <- haplo_21 %in% comparisons_of_interest # all in 21 (ordering)
-  no_gen_hap <- X$N_generation[ind]
-  
-  # isoRelate
-  load(sprintf('../pf3k_chimeric_data/IsoRelate_output_%s.RData', site))
-  Y <- results$my_parameters
-  haplo_21 <- apply(Y[,c('iid2', 'iid1')], 1, paste, collapse = ' ')
-  ind <- haplo_21 %in% comparisons_of_interest # all in 21 (ordering)
-  no_gen_iso <- Y$m[ind] # ind as above since Haplo_assignment and iso_assignment have the same dimnames
-  
-  plot(x = no_gen_hap, y = no_gen_iso, bty = 'n',
-       pch = 20, col = adjustcolor(which(sites == site) + 1, alpha.f = 0.5),
-       main = site, 
-       xlab = c('hmmIBD'), 
-       ylab = c('isoRelate'), 
-       xlim = c(0,max(c(no_gen_hap, no_gen_iso))), 
-       ylim = c(0,max(c(no_gen_hap, no_gen_iso))))
-  points(1,1, pch = 20)
-  abline(a = 0, b = 1)
-  legend('bottomright', bty = 'n', pch = 20, 
-         col = c(adjustcolor(which(sites == site) + 1, alpha.f = 0.5), adjustcolor('black')),
-         legend = c('Estimate', 'Simulated truth'), cex = 0.75)
-}
+hmmIBD_output_path <- '../pf3k_chimeric_data/hmmIBD_%s.hmm_fract.txt'
+isoRelate_output_path <- '../pf3k_chimeric_data/IsoRelate_output_%s.RData'
+plot_gen(hmmIBD_output_path, isoRelate_output_path)
 ```
 
 ### hmmIBD posterior probability of IBD versus proportion simulated IBD 
 
 ```{r, cache.comments = FALSE, echo = FALSE}
-par(mfrow = c(1,3), pty = 's')
-
-for(site in sites){
-  
-  # hmmIBD
-  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData',site))
-  X <- read.table(sprintf('../pf3k_chimeric_data/hmmIBD_%s.hmm_fract.txt', site), header = TRUE)
-  haplo_21 <- apply(X[,c('sample2', 'sample1')], 1, paste, collapse = ' ')
-  rownames(X) <- haplo_21
-  ind <- haplo_21 %in% comparisons_of_interest # all in 21 (not that %in% doesn't conserve order)
-  post_prob_hap <- X[ind,][comparisons_of_interest, 'fract_sites_IBD'] # closest thing
-  
-  # Simulated 
-  positive_simulated <- rep(NA, length(comparisons_of_interest))
-  names(positive_simulated) <- comparisons_of_interest
-  load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
-  n_snps <- nsnps[site]
-  
-  for(i in comparisons_of_interest){
-    samples <- strsplit(i, ' ')[[1]]
-    parent <- sprintf('parent%s', which(strsplit(samples[1], split = ":")[[1]] == samples[2]))
-    simulated <- parent_assignment[,strsplit(i, split = ' ')[[1]][1]]
-    positive_simulated[i] <- sum(simulated == parent)
-  }
-  
-  
-  plot(x = positive_simulated/n_snps, y = post_prob_hap, bty = 'n',
-       pch = 20, col = adjustcolor(which(sites == site) + 1, alpha.f = 0.5),
-       xlab = c('Simulated'), 
-       ylab = c('hmmIBD'), 
-       xlim = c(0,1), 
-       ylim = c(0,1))
-  
-  abline(a = 0, b = 1, lty = 'dotted')
-}
+plot_pos(hmmIBD_output_path)
 ```
 
 ## Inference results based on erroneous chimeric children
@@ -454,9 +484,9 @@ summary_table <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_time
                                               sprintf('%s (%s)', round(mean_times_real,
                                                                        3)['hmmIBD'],round(se_real['hmmIBD'], 3))),
                        'CPU time (sec)' = c(sprintf('%s (%s)', round(mean_times_user,
-                                                                           3)['isoRelate'],round(se_user['isoRelate'], 3)), 
-                                                  sprintf('%s (%s)', round(mean_times_user,
-                                                                           3)['hmmIBD'],round(se_user['hmmIBD'], 3))),
+                                                                     3)['isoRelate'],round(se_user['isoRelate'], 3)), 
+                                            sprintf('%s (%s)', round(mean_times_user,
+                                                                     3)['hmmIBD'],round(se_user['hmmIBD'], 3))),
                        'Accuracy' = c(sprintf('%s (%s)', 
                                               round(apply(accuracy, 2, mean), 3)['isoRelate'],
                                               round(apply(accuracy, 2, sd), 3)['isoRelate']), 
