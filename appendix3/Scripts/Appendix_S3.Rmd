@@ -60,7 +60,7 @@ We used artificially recombined data to compare results generated under hmmIBD a
 6.  Artificially recombined each unrelated sample pair to create a "chimeric child". Recombination was simulated by sampling crossover positions (in base pairs, bp) from an exponential distribution with mean equal to the recombination rate in Morgans, M, per bp (see $\texttt{functions.R}$). 
 7. Recorded the parent of each DNA segment in each chimeric child, and plotted the number of crossovers per chromosome averaged over all the chimeric children per site.  
 
-In addition to the above steps, we generated an erroneous copy of each chimeric child. More specifically, for each SNP of each chimeric child, with probability equal to the genotyping error 0.001, the copied allele was replaced by an allele selected uniformly at random from A, T, G, C. 
+In addition to the above steps, we generated an erroneous copy of each parent and chimeric child. More specifically, for each SNP with probability equal to the genotyping error 0.001, the copied allele was replaced by its biallelic counterpart. 
 
 <!-- UPDATE THIS SECTION WITH PARAMETERS USED TO RUN SH SCRIPTS -->
 ## Experiments to evaluate timing 
@@ -91,7 +91,7 @@ For each site, IBD segments between `r n_children_to_analyse` "chimeric children
 
 We also compared estimates of the numbers of generations generated under isoRelate and hmmIBD, and the proportion simulated IBD with the posterior probability of IBD generated under hmmIBD (the latter was not directly available under v0.1.0 of isoRelate).
 
-To investigate the impact of genotyping error, the process was then repeated for erroneous copies of the same `r n_children_to_analyse` chimeric children. 
+To investigate the impact of genotyping error, the process was then repeated for the erroneous copies of the same `r n_children_to_analyse` chimeric children and their parents. 
 
 
 # Results
