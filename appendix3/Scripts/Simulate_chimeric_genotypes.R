@@ -3,7 +3,10 @@
 # 1) extract biallelic Pf3k data per site for sites with more than 100 isolates; 
 # 2) calculate, plot and save pairwise IBS per site; 
 # 3) extract unrelated sample pair names per site and save; 
-# 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers;
+# 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers
+# 5) Addendum: copy chimeric children adding genotyping error 
+#              added and run separately on 9/10th Jan 2018
+# Manually check error_prob matches Run_isoRelate_Magic_numbers.RData
 ################################################################################
 
 # Clear workspace and load libraries/functions
@@ -146,7 +149,7 @@ for(site in sites){
   
   print(sprintf('%s: %s unrelated sample comparisons, %s unique parents', 
                 site, nrow(unrelated), length(unique(as.vector(unrelated)))))
-
+  
   # Save
   save(unrelated, file = sprintf('../pf3k_chimeric_data/pf3k_data_unrelated_%s.RData', site)) 
 }
@@ -237,3 +240,45 @@ for(site in sites){
   barplot(colMeans(crossovers), las = 2, ylim = c(0,2), main = site, 
           xlab = 'Chromosome', ylab = 'Average no. of crossovers')
 }
+
+
+
+# -------------- Copy chimeric children adding genotyping error --------------
+rm(list = ls())
+source(file = './functions.R') # functions
+load('../pf3k_chimeric_data/sites.RData')
+load('../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
+Magic_numbers$error_prob <- 0.001
+attach(Magic_numbers, warn.conflicts = FALSE)
+
+# Function to introduce genotyping error (works as vector)
+genotyping_error <- function(x, seed){
+  set.seed(seed)
+  ifelse(runif(length(x)) <= error_prob, abs(x-1), x)
+}
+
+for(site in sites){
+  copied <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site), header = TRUE, sep = '\t'))
+  copied_missing <- copied[,-(1:2)] == -1    
+  copied[!copied_missing] <- genotyping_error(copied[!copied_missing], seed = 1)
+  parents_children <- copied 
+  
+  # Save for hmmIBD
+  write.table(parents_children, sep = '\t', row.names = FALSE, col.names = TRUE, quote = FALSE, 
+              file = sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.txt', 
+                             site))
+  
+  # Save all parent children in pedmap for isoRelate
+  pedmap <- reformat_isorelate(parents_children, rho)
+  save(pedmap, file = sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.RData',
+                              site))
+  
+}
+
+
+
+
+
+
+
+
