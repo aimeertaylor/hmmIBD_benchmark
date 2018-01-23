@@ -3,14 +3,15 @@
 # 1) extract biallelic Pf3k data per site for sites with more than 100 isolates; 
 # 2) calculate, plot and save pairwise IBS per site; 
 # 3) extract unrelated sample pair names per site and save; 
-# 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers
-# 5) Addendum: copy chimeric children adding genotyping error 
-#              added and run separately on 9/10th Jan 2018
-# Manually check error_prob matches Run_isoRelate_Magic_numbers.RData
+# 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers;
+# 5) copy chimeric children, adding genotyping error, and reload to check expected.
+# In total takes 389.678 sec
 ################################################################################
 
 # Clear workspace and load libraries/functions
 rm(list = ls()) 
+require(tictoc)
+tic()
 
 # Packages and ancillary files 
 inst_pkg_list <- rownames(installed.packages())
@@ -20,15 +21,15 @@ if("data.table" %in% inst_pkg_list){
   install.packages("data.table")
   library(data.table)
 }
-source(file = './functions.R') # functions
+source(file = './functions.R') 
 
 # Magic numbers
 Magic_numbers <- list(min_num = 100, # minimum number of isolates per site
                       MAF = 0.01, # minimum minor allele frequency  
                       cutoff = 0.01, # the identity-by-state percentile cut off
                       nchrom = 14, # number of Plasmodium falciparum chromosomes 
-                      rho = 5.833965e-07, # this is based on a comparison of positions in isoRelates png_pedmap
-                      seed_simulate = 1) # recombination rate per base pair 
+                      rho = 5.833965e-07, # recombination rate per base pair based on a comparison of positions in isoRelates png_pedmap
+                      seed_simulate = 1) # for reproducibility
 
 attach(Magic_numbers)
 save(Magic_numbers, file = '../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
@@ -59,8 +60,8 @@ for(site in sites){
   site_data_biallelic <- site_data[biallelic, ]
   
   # Remove SNPs with frequency <= MAF
-  temp <-  site_data_biallelic # Replace missing with NA
-  temp[temp == -1] <- NA
+  temp <-  site_data_biallelic 
+  temp[temp == -1] <- NA # Replace missing with NA
   allele_frequencies <- apply(temp[,-(1:2)], 1, mean, na.rm = TRUE)
   MAFplus <- allele_frequencies > MAF
   site_data_biallelic_MAFplus <- as.matrix(site_data_biallelic[MAFplus, ])
@@ -69,7 +70,7 @@ for(site in sites){
                                                    allele_frequencies[MAFplus])
   print(sprintf('%s: %s SNPs', site, nrow(site_data_biallelic_MAFplus_frequencies)))
   
-  # Reformat to avoid scientific notation
+  # Reformat to avoid scientific notation (8e+05)
   site_data_biallelic_MAFplus_frequencies[,'pos'] <- format(site_data_biallelic_MAFplus_frequencies[,'pos'], scientific = FALSE)
   
   # Save site specific biallelic data and allele frequencies
@@ -77,7 +78,7 @@ for(site in sites){
        file = sprintf('../pf3k_chimeric_data/pf3k_data_biallelic_%s.RData', site))
   
   # Save site specific allele frequencies for hmmIBD
-  write.table(site_data_biallelic_MAFplus_frequencies, col.names = FALSE, row.names = FALSE, quote = FALSE, sep = '\t', # to prevent 8e+05
+  write.table(site_data_biallelic_MAFplus_frequencies, col.names = FALSE, row.names = FALSE, quote = FALSE, sep = '\t',
               file = sprintf('../pf3k_chimeric_data/pf3k_data_biallelic_frequencies_%s.txt', site))
   
   # Save site reference pedmap for isoRelate
@@ -181,7 +182,7 @@ for(site in sites){
                                   pos = site_data_biallelic_MAFplus[,'pos'], 
                                   array(dim = c(n_snps, n_children), 
                                         dimnames = list(NULL, children)), 
-                                  check.names = FALSE) # otherwise ":" being converted to "."
+                                  check.names = FALSE) # otherwise ":" is converted to "."
   
   # For each unrelated sample pair generate a chimeric child
   for(i in 1:n_children){ 
@@ -193,7 +194,7 @@ for(site in sites){
                        parent2 = site_data_biallelic_MAFplus[, unrelated[i,2]], 
                        child = NA)
     
-    # create chimeric
+    # Create chimeric
     result <- recombine(trio, rho, nchrom)
     
     # Record parent assignment
@@ -209,13 +210,11 @@ for(site in sites){
   
   # Save data set for hmmIBD
   write.table(parents_children, sep = '\t', row.names = FALSE, col.names = TRUE, quote = FALSE, 
-              file = sprintf('../pf3k_chimeric_data/parents_children_%s.txt', 
-                             site))
+              file = sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site))
   
   # Save all parent children in pedmap for isoRelate
   pedmap <- reformat_isorelate(parents_children, rho)
-  save(pedmap, file = sprintf('../pf3k_chimeric_data/parents_children_%s.RData',
-                              site))
+  save(pedmap, file = sprintf('../pf3k_chimeric_data/parents_children_%s.RData', site))
 }
 
 
@@ -225,7 +224,7 @@ for(site in sites){
 par(mfrow = c(length(sites),1))
 for(site in sites){
   
-  # load chimeric data 
+  # Load chimeric data 
   load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
   unrelated_pairs <- colnames(parent_assignment[,-(1:2)])
   crossovers <- array(dim = c(length(unrelated_pairs), 14), dimnames = list(unrelated_pairs, as.character(1:14)))
@@ -243,13 +242,16 @@ for(site in sites){
 
 
 
-# -------------- Copy chimeric children adding genotyping error --------------
+# ----------- Copy chimeric children adding genotyping error ------------
 rm(list = ls())
 source(file = './functions.R') # functions
 load('../pf3k_chimeric_data/sites.RData')
 load('../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
-Magic_numbers$error_prob <- 0.001
+Magic_numbers$error_prob <- 0.005
 attach(Magic_numbers, warn.conflicts = FALSE)
+# Resave 
+save(Magic_numbers, file = '../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
+
 
 # Function to introduce genotyping error (works as vector)
 genotyping_error <- function(x, seed){
@@ -258,10 +260,14 @@ genotyping_error <- function(x, seed){
 }
 
 for(site in sites){
-  copied <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site), header = TRUE, sep = '\t'))
-  copied_missing <- copied[,-(1:2)] == -1    
-  copied[!copied_missing] <- genotyping_error(copied[!copied_missing], seed = 1)
-  parents_children <- copied 
+  copied <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site), 
+                                 header = TRUE, sep = '\t', check.names=FALSE))
+  copied_SNPData <- copied[,-(1:2)]
+  copied_SNPData_missing <- copied_SNPData == -1
+  copied_SNPData[!copied_SNPData_missing] <- genotyping_error(copied_SNPData[!copied_SNPData_missing], seed = 1)
+  
+  # as.integer prevents SNP no. 11231 of Thies being recorder in scientific notation 
+  parents_children <- apply(cbind(copied[,1:2], copied_SNPData), 2, as.integer)
   
   # Save for hmmIBD
   write.table(parents_children, sep = '\t', row.names = FALSE, col.names = TRUE, quote = FALSE, 
@@ -275,6 +281,16 @@ for(site in sites){
   
 }
 
+# Compare erroneous and non-erroneus to ensure error rate as expected
+for(site in sites){
+  non_erroneous <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site), 
+                                 header = TRUE, sep = '\t', check.names=FALSE))
+  erroneous <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.txt', site), 
+                                        header = TRUE, sep = '\t', check.names=FALSE))
+  
+  print(1-mean(non_erroneous[, -(1:2)] == erroneous[, -(1:2)], na.rm = TRUE))
+}
+toc()
 
 
 

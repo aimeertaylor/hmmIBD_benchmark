@@ -1,5 +1,5 @@
 ---
-title: "Appendix S3: comparative study of isoRelate and hmmIBD"
+title: 'Additional file 3: Comparative study of isoRelate and hmmIBD'
 output: pdf_document
 ---
 
@@ -30,7 +30,7 @@ if("knitr" %in% inst_pkg_list){# For tables from matrices
 }
 
 # Magic numbers
-load(file = '../pf3k_chimeric_data/Run_isoRelate_Magic_numbers.RData')
+load(file = '../pf3k_chimeric_data/Run_isoRelate_hmmIBD_magic_numbers.RData')
 attach(Magic_numbers)
 load(file = '../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
 attach(Magic_numbers)
@@ -60,9 +60,9 @@ We used artificially recombined data to compare results generated under hmmIBD a
 6.  Artificially recombined each unrelated sample pair to create a "chimeric child". Recombination was simulated by sampling crossover positions (in base pairs, bp) from an exponential distribution with mean equal to the recombination rate in Morgans, M, per bp (see $\texttt{functions.R}$). 
 7. Recorded the parent of each DNA segment in each chimeric child, and plotted the number of crossovers per chromosome averaged over all the chimeric children per site.  
 
-In addition to the above steps, we generated an erroneous copy of each parent and chimeric child. More specifically, for each SNP with probability equal to the genotyping error 0.001, the copied allele was replaced by its biallelic counterpart. 
+In addition to the above steps, we generated an erroneous copy of each parent and chimeric child. More specifically, for each SNP with probability equal to the genotyping error `r error_prob`, the copied allele was replaced by its biallelic counterpart. 
 
-<!-- UPDATE THIS SECTION WITH PARAMETERS USED TO RUN SH SCRIPTS -->
+<!-- UPDATE THIS SECTION WITH PARAMETERS USED IN hmm.c -->
 ## Experiments to evaluate timing 
 
 Timing experiments were performed on the first `r n_timing_samples_to_run` samples per site (including unrecombined parents and non-erroneous chimeric children), and repeated `r n_timing_repetition` times on a MacBook Air laptop with 1.7 GHz Intel Core i7 processor using the parameter values listed in the table below. Some of the parameter values differ to the defaults provided in order to more closely match the two methods.  
@@ -89,10 +89,9 @@ For each site, IBD segments between `r n_children_to_analyse` "chimeric children
 \text{Specificity} &= \dfrac{\sum \text{ True negative}}{\sum \text{ nIBD states}}.
 \end{align}
 
-We also compared estimates of the numbers of generations generated under isoRelate and hmmIBD, and the proportion simulated IBD with the posterior probability of IBD generated under hmmIBD (the latter was not directly available under v0.1.0 of isoRelate).
+We also compared estimates of the numbers of generations inferred under isoRelate and hmmIBD, and the proportion simulated IBD with the posterior probability of IBD inferred under hmmIBD (the latter was not directly available under v0.1.0 of isoRelate).
 
-To investigate the impact of genotyping error, the process was then repeated for the erroneous copies of the same `r n_children_to_analyse` chimeric children and their parents. 
-
+To investigate the impact of genotyping error, the entire process was then repeated for the erroneous copies of `r n_children_to_analyse` chimeric children and their parents. We expect error to introduce small and incorrectly inferred segments into otherwise correctly inferred segments of DNA that are both IBD and not. Concomitantly, we expect error to spuriously increase estimates of numbers of generations since most recent common ancestors. 
 
 # Results
 
@@ -128,7 +127,7 @@ kable(time_store[,,'user'], caption = sprintf('CPU time (sec) per %s samples', n
 mean_times_real <- colMeans(time_store[,,'real'])
 mean_times_user <- colMeans(time_store[,,'user'])
 
-# sds
+# Standard deviations
 se_real <- apply(time_store[,,'real'], 2, sd)
 se_user <- apply(time_store[,,'user'], 2, sd)
 
@@ -139,7 +138,7 @@ fold_diff <- mean(time_store[,'isoRelate','user']/time_store[,'hmmIBD','user'])
 # Define function to plot asignments
 plot_assignments <- function(comp){
   
-  # Determin if a comparison with parent1 or parent2? 
+  # Determine if a comparison with parent1 or parent2? 
   samples <- strsplit(comp, split = ' ')[[1]]
   child_ind <- grepl(":", samples)
   child <- samples[child_ind]
@@ -354,7 +353,7 @@ plot_gen <- function(hmmIBD_output_path, IsoRelate_output_path){
 ```
 
 ```{r, cache.comments = FALSE, echo = FALSE}
-# Define function to plot posterior probability
+# Define function to plot posterior IBD probability
 plot_pos <- function(hmmIBD_output_path){
   
   par(mfrow = c(1,3), pty = 's')
@@ -396,15 +395,11 @@ plot_pos <- function(hmmIBD_output_path){
 
 ```{r, cache.comments = FALSE, echo = FALSE}
 # Load results for inference common across erroneous and non-erroneous children
-comparisons_of_interest_sites <- vector('list', length = length(sites))
 parent_assignment_sites <- vector('list', length = length(sites))
-names(comparisons_of_interest_sites) <- sites
 names(parent_assignment_sites) <- sites
 
 for(site in sites){
-  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData', site))
   load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
-  comparisons_of_interest_sites[[site]] <- comparisons_of_interest
   parent_assignment_sites[[site]] <- parent_assignment
 }
 ```
@@ -413,14 +408,18 @@ for(site in sites){
 
 ```{r, cache.comments = FALSE, echo = FALSE}
 # Load results for non-erroneous chimeric children
+comparisons_of_interest_sites <- vector('list', length = length(sites))
 isoRelate_assignment_sites <- vector('list', length = length(sites))
 hmmIBD_assignment_sites <- vector('list', length = length(sites))
+names(comparisons_of_interest_sites) <- sites
 names(isoRelate_assignment_sites) <- sites
 names(hmmIBD_assignment_sites) <- sites
 
 for(site in sites){
+  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s.RData', site))
   load(sprintf('../pf3k_chimeric_data/isoRelate_assignment_%s.RData', site))
   load(sprintf('../pf3k_chimeric_data/hmmIBD_assignment_%s.RData', site))
+  comparisons_of_interest_sites[[site]] <- comparisons_of_interest
   isoRelate_assignment_sites[[site]] <- isoRelate_assignment
   hmmIBD_assignment_sites[[site]] <- hmmIBD_assignment
 }
@@ -428,14 +427,13 @@ for(site in sites){
 # Extract accuracy, specificity and sensitivity
 mean_acc_spec_sens <- acc_spec_sens()
 attach(mean_acc_spec_sens, warn.conflicts = FALSE)
+mean_acc_spec_sens_non_erroneous <- mean_acc_spec_sens # save for summary
 
 # Plot
 plot_acc_spec_sens(sites[1])
 plot_acc_spec_sens(sites[2])
 plot_acc_spec_sens(sites[3])
 ```
-
-
 
 ### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
 
@@ -460,7 +458,7 @@ Both methods overestimate the number of generations:
 ```{r, cache.comments = FALSE, echo = FALSE}
 hmmIBD_output_path <- '../pf3k_chimeric_data/hmmIBD_%s.hmm_fract.txt'
 isoRelate_output_path <- '../pf3k_chimeric_data/IsoRelate_output_%s.RData'
-plot_gen(hmmIBD_output_path, isoRelate_output_path)
+plot_gen(hmmIBD_output_path, isoRelate_output_path)  
 ```
 
 ### hmmIBD posterior probability of IBD versus proportion simulated IBD 
@@ -471,23 +469,88 @@ plot_pos(hmmIBD_output_path)
 
 ## Inference results based on erroneous chimeric children
 
+```{r, cache.comments = FALSE, echo = FALSE}
+# Load results for non-erroneous chimeric children
+comparisons_of_interest_sites <- vector('list', length = length(sites))
+isoRelate_assignment_sites <- vector('list', length = length(sites))
+hmmIBD_assignment_sites <- vector('list', length = length(sites))
+names(comparisons_of_interest_sites) <- sites
+names(isoRelate_assignment_sites) <- sites
+names(hmmIBD_assignment_sites) <- sites
 
+for(site in sites){
+  load(sprintf('../pf3k_chimeric_data/comparisons_of_interest_%s_erroneous.RData', site))
+  load(sprintf('../pf3k_chimeric_data/isoRelate_assignment_%s_erroneous.RData', site))
+  load(sprintf('../pf3k_chimeric_data/hmmIBD_assignment_%s_erroneous.RData', site))
+  comparisons_of_interest_sites[[site]] <- comparisons_of_interest
+  isoRelate_assignment_sites[[site]] <- isoRelate_assignment
+  hmmIBD_assignment_sites[[site]] <- hmmIBD_assignment
+}
 
+# Extract accuracy, specificity and sensitivity
+mean_acc_spec_sens <- acc_spec_sens()
+attach(mean_acc_spec_sens, warn.conflicts = FALSE)
+mean_acc_spec_sens_erroneous <- mean_acc_spec_sens # save for summary
+
+# Plot
+plot_acc_spec_sens(sites[1])
+plot_acc_spec_sens(sites[2])
+plot_acc_spec_sens(sites[3])
+```
+
+### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
+
+```{r, cache.comments = FALSE, echo = FALSE}
+set.seed(1)
+site <- "Kassena"
+comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
+parent_assignment <- parent_assignment_sites[[site]] 
+isoRelate_assignment <- isoRelate_assignment_sites[[site]] 
+hmmIBD_assignment <- hmmIBD_assignment_sites[[site]] 
+comp1 <- sample(comparisons_of_interest, 1)
+plot_assignments(comp1)
+comp2 <- sample(comparisons_of_interest, 1)
+plot_assignments(comp2)
+```
+
+### Estimates of numbers of generations
+
+Both methods overestimate the number of generations:
+
+```{r, cache.comments = FALSE, echo = FALSE}
+hmmIBD_output_path <- '../pf3k_chimeric_data/hmmIBD_%s_erroneous.hmm_fract.txt'
+isoRelate_output_path <- '../pf3k_chimeric_data/IsoRelate_output_%s_erroneous.RData'
+plot_gen(hmmIBD_output_path, isoRelate_output_path)  
+```
+
+### hmmIBD posterior probability of IBD versus proportion simulated IBD 
+
+```{r, cache.comments = FALSE, echo = FALSE}
+plot_pos(hmmIBD_output_path)
+```
 
 # Summary
 
-Both isoRelate and hmmIBD are highly accurate, sensitive and specific. In addition to IBD segments, hmmIBD returns the posterior IBD proportion (a measure of relatedness that integrates over all possible IBD segment assignments). Under v0.1.0 of isoRelate, posterior probabilities of the IBD state are not readily accessible, but many auxiliary functions for visualizing model output and assessing significance are provided. On average, hmmIBD was `r round(fold_diff, 0)` times faster in user CPU time than isoRelate, but both perform adequately in real time.   
+Both isoRelate and hmmIBD are highly accurate, sensitive and specific, including when genotyping error equal to 0.005 in the data is misspecified under the model at 0.001. In addition to IBD segments, hmmIBD returns the posterior IBD proportion (a measure of relatedness that integrates over all possible IBD segment assignments). Under v0.1.0 of isoRelate, posterior probabilities of the IBD state are not readily accessible, but many auxiliary functions for visualizing model output and assessing significance are provided. On average, hmmIBD was `r round(fold_diff, 0)` times faster in user CPU time than isoRelate, but both perform adequately in real time.   
 
 ```{r, cache.comments = FALSE, echo = FALSE}
-summary_table <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_times_real,
+summary_times <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_times_real,
                                                                        3)['isoRelate'],round(se_real['isoRelate'], 3)), 
                                               sprintf('%s (%s)', round(mean_times_real,
                                                                        3)['hmmIBD'],round(se_real['hmmIBD'], 3))),
                        'CPU time (sec)' = c(sprintf('%s (%s)', round(mean_times_user,
                                                                      3)['isoRelate'],round(se_user['isoRelate'], 3)), 
                                             sprintf('%s (%s)', round(mean_times_user,
-                                                                     3)['hmmIBD'],round(se_user['hmmIBD'], 3))),
-                       'Accuracy' = c(sprintf('%s (%s)', 
+                                                                     3)['hmmIBD'],round(se_user['hmmIBD'], 3))))
+
+rownames(summary_times) <- c('isoRelate', 'hmmIBD') 
+kable(summary_times, caption = sprintf('Summary of average run times for %s samples on a MacBook Air with 1.7 GHz Intel Core i7 processor. Standard deviations in parentheses.', n_timing_samples_to_run))
+```
+
+
+```{r, cache.comments = FALSE, echo = FALSE}
+attach(mean_acc_spec_sens_non_erroneous, warn.conflicts = F) 
+summary_table <- cbind('Accuracy' = c(sprintf('%s (%s)', 
                                               round(apply(accuracy, 2, mean), 3)['isoRelate'],
                                               round(apply(accuracy, 2, sd), 3)['isoRelate']), 
                                       sprintf('%s (%s)', 
@@ -508,5 +571,31 @@ summary_table <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_time
                                                  round(apply(specificity, 2, sd), 3)['hmmIBD'])))
 
 rownames(summary_table) <- c('isoRelate', 'hmmIBD') 
-kable(summary_table, caption = sprintf('Summary of average scores with standard deviations in parentheses. Times correspond to %s samples on a MacBook Air with 1.7 GHz Intel Core i7 processor.', n_timing_samples_to_run))
+kable(summary_table, caption = 'Summary of average scores based on non-erroneous data with standard deviations in parentheses.')
+```
+
+```{r, cache.comments = FALSE, echo = FALSE}
+attach(mean_acc_spec_sens_erroneous, warn.conflicts = F) 
+summary_table <- cbind('Accuracy' = c(sprintf('%s (%s)', 
+                                              round(apply(accuracy, 2, mean), 3)['isoRelate'],
+                                              round(apply(accuracy, 2, sd), 3)['isoRelate']), 
+                                      sprintf('%s (%s)', 
+                                              round(apply(accuracy, 2, mean), 3)['hmmIBD'],
+                                              round(apply(accuracy, 2, sd), 3)['hmmIBD'])), 
+                       'Sensitivity' = c(sprintf('%s (%s)', 
+                                                 round(apply(sensitivity, 2, mean), 3)['isoRelate'],
+                                                 round(apply(sensitivity, 2, sd), 3)['isoRelate']), 
+                                         sprintf('%s (%s)', 
+                                                 round(apply(sensitivity, 2, mean), 3)['hmmIBD'],
+                                                 round(apply(sensitivity, 2, sd), 3)['hmmIBD'])), 
+                       
+                       'Specificity' = c(sprintf('%s (%s)', 
+                                                 round(apply(specificity, 2, mean), 3)['isoRelate'],
+                                                 round(apply(specificity, 2, sd), 3)['isoRelate']), 
+                                         sprintf('%s (%s)', 
+                                                 round(apply(specificity, 2, mean), 3)['hmmIBD'],
+                                                 round(apply(specificity, 2, sd), 3)['hmmIBD'])))
+
+rownames(summary_table) <- c('isoRelate', 'hmmIBD') 
+kable(summary_table, caption = sprintf('Summary of average scores based on erroneous data with standard deviations in parentheses.', n_timing_samples_to_run))
 ```
