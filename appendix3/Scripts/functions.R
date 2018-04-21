@@ -1,12 +1,21 @@
 #######################################################################
 # Functions to recombine two parent genomes into a chimeric child     #                                  
 #######################################################################
-recombine <- function(trio, rho, nchrom){
+recombine <- function(trio, rho_av, nchrom, rho_high = NA, rho_low = NA){
   
+  rho = rho_av
+  nonuniform <- !is.na(rho_high) & !is.na(rho_low) # If rho_high and low specified, then assume non uniform recombination around centromeres 
   parents <- colnames(trio)[grep('parent', colnames(trio))]
   parent <- sample(parents, size = 1) # choose a parent with probability 0.5
+  
   for(chrom in 1:nchrom){
     
+    if(nonuniform){
+      centromere <- centromeres[chrom,c('V2','V3')]
+      low_region <- apply(rbind(centromere, centromere + c(-1,1)*30000), 2, sort)
+      high_region <- apply(rbind(centromere + c(-1,1)*80000, centromere + c(-1,1)*120000), 2, sort) 
+    }
+     
     chrom_length <- chrom_lengths[chrom,'V3']
     time <- rexp(1, rho)
     
@@ -24,6 +33,15 @@ recombine <- function(trio, rho, nchrom){
         ind <- (trio$chrom == chrom) & (trio$pos <= time)
         trio[ind, 'child'] <- trio[ind, parent]
         trio[ind, 'assignment'] <- rep(parent, sum(ind))
+        
+        # Alter rho only if non uniform and within 30 or 80-120 kb of the centromere
+        if(nonuniform){  
+          low <- any(low_region[1,] < time & low_region[2,] > time)
+          high <- any(high_region[1,] < time & high_region[2,] > time)
+          if(low){rho = rho_low}
+          if(high){rho = rho_high}
+          if(!low & !high){rho = rho_av}
+        } 
         
         # switch parent and redraw a new crossover time
         parent <- parents[which(parents != parent)] 
