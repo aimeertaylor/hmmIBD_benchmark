@@ -19,6 +19,11 @@ The following summarizes results generated from a comparative study of hmmIBD an
 8. Run/knit this file. 
 
 ```{r setup, include=FALSE}
+#===============================================================================
+# Default chunk options
+#===============================================================================
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, include=TRUE, cache=TRUE, cache.comments = FALSE, fig.pos = 'H', fig.width = 7, dev = 'png', dpi = 300)
+
 # Clear workspace, load libraries, specify magic numbers used
 rm(list = ls()) 
 inst_pkg_list <- rownames(installed.packages())
@@ -97,7 +102,7 @@ To investigate the impact of genotyping error, the entire process was then repea
 
 ## Timing 
 
-```{r, cache.comments = FALSE, echo = FALSE} 
+```{r} 
 time_store <- array(dim = c(length(sites)*n_timing_repetition,2,2), 
                     dimnames = list(paste(sites, rep(1:n_timing_repetition, each = length(sites))), c('isoRelate', 'hmmIBD'), c('real', 'user')))
 
@@ -217,7 +222,7 @@ plot_assignments <- function(comp){
 }
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Define function to extract accuracy, specificity and sensitivity
 acc_spec_sens <- function(){
   
@@ -284,7 +289,7 @@ acc_spec_sens <- function(){
 
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Define function to plot accuracy, specificity and sensitivity
 plot_acc_spec_sens <- function(site){
   
@@ -315,7 +320,7 @@ plot_acc_spec_sens <- function(site){
 }
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Define function to plot generations
 plot_gen <- function(hmmIBD_output_path, IsoRelate_output_path){
   par(mfrow = c(1,3), pty = 's')
@@ -352,7 +357,7 @@ plot_gen <- function(hmmIBD_output_path, IsoRelate_output_path){
 }
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Define function to plot posterior IBD probability
 plot_pos <- function(hmmIBD_output_path){
   
@@ -393,7 +398,7 @@ plot_pos <- function(hmmIBD_output_path){
 }
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Load results for inference common across erroneous and non-erroneous children
 parent_assignment_sites <- vector('list', length = length(sites))
 names(parent_assignment_sites) <- sites
@@ -406,7 +411,7 @@ for(site in sites){
 
 ## Inference based on non-erroneous chimeric children
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Load results for non-erroneous chimeric children
 comparisons_of_interest_sites <- vector('list', length = length(sites))
 isoRelate_assignment_sites <- vector('list', length = length(sites))
@@ -437,7 +442,7 @@ plot_acc_spec_sens(sites[3])
 
 ### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 set.seed(1)
 site <- "Kassena"
 comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
@@ -455,7 +460,7 @@ plot_assignments(comp2)
 
 Both methods overestimate the number of generations:
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 hmmIBD_output_path <- '../pf3k_chimeric_data/hmmIBD_%s.hmm_fract.txt'
 isoRelate_output_path <- '../pf3k_chimeric_data/IsoRelate_output_%s.RData'
 plot_gen(hmmIBD_output_path, isoRelate_output_path)  
@@ -463,13 +468,13 @@ plot_gen(hmmIBD_output_path, isoRelate_output_path)
 
 ### hmmIBD posterior probability of IBD versus proportion simulated IBD 
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 plot_pos(hmmIBD_output_path)
 ```
 
 ## Inference results based on erroneous chimeric children
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 # Load results for non-erroneous chimeric children
 comparisons_of_interest_sites <- vector('list', length = length(sites))
 isoRelate_assignment_sites <- vector('list', length = length(sites))
@@ -500,7 +505,7 @@ plot_acc_spec_sens(sites[3])
 
 ### Illustrative assignment plots for two randomly selected pairwise comparisons from Kassena
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 set.seed(1)
 site <- "Kassena"
 comparisons_of_interest <- comparisons_of_interest_sites[[site]]  
@@ -517,7 +522,7 @@ plot_assignments(comp2)
 
 Both methods overestimate the number of generations:
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 hmmIBD_output_path <- '../pf3k_chimeric_data/hmmIBD_%s_erroneous.hmm_fract.txt'
 isoRelate_output_path <- '../pf3k_chimeric_data/IsoRelate_output_%s_erroneous.RData'
 plot_gen(hmmIBD_output_path, isoRelate_output_path)  
@@ -533,7 +538,7 @@ plot_pos(hmmIBD_output_path)
 
 Both isoRelate and hmmIBD are highly accurate, sensitive and specific, including when genotyping error equal to 0.005 in the data is misspecified under the model at 0.001. In addition to IBD segments, hmmIBD returns the posterior IBD proportion (a measure of relatedness that integrates over all possible IBD segment assignments). Under v0.1.0 of isoRelate, posterior probabilities of the IBD state are not readily accessible, but many auxiliary functions for visualizing model output and assessing significance are provided. On average, hmmIBD was `r round(fold_diff, 0)` times faster in user CPU time than isoRelate, but both perform adequately in real time.   
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 summary_times <- cbind('Clock time (sec)' = c(sprintf('%s (%s)', round(mean_times_real,
                                                                        3)['isoRelate'],round(se_real['isoRelate'], 3)), 
                                               sprintf('%s (%s)', round(mean_times_real,
@@ -548,7 +553,7 @@ kable(summary_times, caption = sprintf('Summary of average run times for %s samp
 ```
 
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 attach(mean_acc_spec_sens_non_erroneous, warn.conflicts = F) 
 summary_table <- cbind('Accuracy' = c(sprintf('%s (%s)', 
                                               round(apply(accuracy, 2, mean), 3)['isoRelate'],
@@ -574,7 +579,7 @@ rownames(summary_table) <- c('isoRelate', 'hmmIBD')
 kable(summary_table, caption = 'Summary of average scores based on non-erroneous data with standard deviations in parentheses.')
 ```
 
-```{r, cache.comments = FALSE, echo = FALSE}
+```{r}
 attach(mean_acc_spec_sens_erroneous, warn.conflicts = F) 
 summary_table <- cbind('Accuracy' = c(sprintf('%s (%s)', 
                                               round(apply(accuracy, 2, mean), 3)['isoRelate'],
