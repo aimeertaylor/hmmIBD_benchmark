@@ -1,21 +1,65 @@
 #######################################################################
-# Functions to recombine two parent genomes into a chimeric child     #                                  
+# Function to recombine two parent genomes into a chimeric child      #
+# using a piecewise constant function based on Miles A, et al. (2016) #                             #
 #######################################################################
-recombine <- function(trio, rho_av, nchrom, rho_high = NA, rho_low = NA){
+recombine_piecewise <- function(trio, nchrom, rho_av, rho_low, rho_high){
   
-  rho = rho_av
-  nonuniform <- !is.na(rho_high) & !is.na(rho_low) # If rho_high and low specified, then assume non uniform recombination around centromeres 
   parents <- colnames(trio)[grep('parent', colnames(trio))]
-  parent <- sample(parents, size = 1) # choose a parent with probability 0.5
   
   for(chrom in 1:nchrom){
     
-    if(nonuniform){
-      centromere <- centromeres[chrom,c('V2','V3')]
-      low_region <- apply(rbind(centromere, centromere + c(-1,1)*30000), 2, sort)
-      high_region <- apply(rbind(centromere + c(-1,1)*80000, centromere + c(-1,1)*120000), 2, sort) 
-    }
-     
+    # Extract length of chromosome and centromere start and end points
+    chrom_length <- chrom_lengths[chrom,'V3']
+    centromere <- centromeres[chrom,c('V2','V3')]
+    
+    # Change points for piecewise constant function 
+    c1 <- min(centromere)-120000
+    c2 <- min(centromere)-80000
+    c3 <- min(centromere)-30000
+    c4 <- min(centromere)
+    c5 <- max(centromere)
+    c6 <- max(centromere)+30000
+    c7 <- max(centromere)+80000
+    c8 <- max(centromere)+120000
+    
+    # Create vector of rhos for entire chrom (inc. non polymorphic sites)
+    rhos <- rep(rho_av, chrom_length) 
+    rhos[c(c1:c2, c7:c8)] <- rho_high
+    rhos[c(c3:c4, c5:c6)] <- rho_low
+    
+    # Sample crossover events with prob according to rhos
+    cross_overs <- runif(chrom_length) <= rhos
+    
+    # Choose a parent to start with probability 0.5
+    parent_first <- sample(parents, size = 1) 
+    parent_second <- parents[which(parents != parent_first)] 
+    ind_parent <- as.logical(cumsum(cross_overs)%%2)  # TRUE if odd, FALSE if even
+    
+    # Populate chrom 
+    ind_chrom <- trio$chrom == chrom  # Extract chrom ind
+    chrom_pos <- trio[ind_chrom, 'pos'] # Extract pos of polymorphic on chrom
+    ind_parent_pos <- ind_parent[chrom_pos] # Extract parent ind for polymorphic only
+    
+    trio[ind_chrom, 'child'][ind_parent_pos] <- trio[ind_chrom, parent_first][ind_parent_pos]
+    trio[ind_chrom, 'child'][!ind_parent_pos] <- trio[ind_chrom, parent_second][!ind_parent_pos]
+    trio[ind_chrom, 'assignment'][ind_parent_pos] <- parent_first
+    trio[ind_chrom, 'assignment'][!ind_parent_pos] <- parent_second
+  }
+  return(trio)
+}
+
+
+
+#######################################################################
+# Function to recombine two parent genomes into a chimeric child     #                                  
+#######################################################################
+recombine_uniform <- function(trio, nchrom, rho){
+  
+  parents <- colnames(trio)[grep('parent', colnames(trio))]
+  
+  for(chrom in 1:nchrom){
+    
+    parent <- sample(parents, size = 1) # choose a parent with probability 0.5
     chrom_length <- chrom_lengths[chrom,'V3']
     time <- rexp(1, rho)
     
@@ -34,15 +78,6 @@ recombine <- function(trio, rho_av, nchrom, rho_high = NA, rho_low = NA){
         trio[ind, 'child'] <- trio[ind, parent]
         trio[ind, 'assignment'] <- rep(parent, sum(ind))
         
-        # Alter rho only if non uniform and within 30 or 80-120 kb of the centromere
-        if(nonuniform){  
-          low <- any(low_region[1,] < time & low_region[2,] > time)
-          high <- any(high_region[1,] < time & high_region[2,] > time)
-          if(low){rho = rho_low}
-          if(high){rho = rho_high}
-          if(!low & !high){rho = rho_av}
-        } 
-        
         # switch parent and redraw a new crossover time
         parent <- parents[which(parents != parent)] 
         time <- time + rexp(1, rho)
@@ -56,15 +91,12 @@ recombine <- function(trio, rho_av, nchrom, rho_high = NA, rho_low = NA){
     }
   }
   return(trio)
-  
 }
 
 
 
 #######################################################################
 # Function to format data for isolate                                 #
-# June 2017                                                           #
-# Aimee Taylor                                                        #
 #######################################################################
 reformat_isorelate <- function(Data, rho){
   
@@ -87,7 +119,7 @@ reformat_isorelate <- function(Data, rho){
   
   Z <- data.frame(chr = Data[,'chrom'], 
                   snp_id = paste(Data[,'chrom'], ":", Data[,'pos'], sep = ''), 
-                  pos_cM = Data[,'pos'] * rho*100, # divide by 100 since centi Morgans, not Morgans 
+                  pos_cM = Data[,'pos'] * rho * 100, # divide by 100 since centi Morgans, not Morgans 
                   pos_bp = Data[,'pos'])  
   
   return(list(X, Z))
