@@ -3,11 +3,12 @@
 # 1) extract biallelic Pf3k data per site for sites with more than 100 isolates; 
 # 2) calculate, plot and save pairwise IBS per site; 
 # 3) extract unrelated sample pair names per site and save; 
-# 4) make chimeric genotypes out of unrelated sample pairs and plot crossovers;
+# 4) make chimeric genotypes out of unrelated sample pairs and generate summary plots;
 # 5) copy chimeric children, adding genotyping error, and reload to check expected.
-# In total takes 389.678 sec
+# In total takes ~1607 sec
 ################################################################################
 
+# --------------- Set up -------------------------
 # Clear workspace and load libraries/functions
 rm(list = ls()) 
 require(tictoc)
@@ -29,6 +30,9 @@ Magic_numbers <- list(min_num = 100, # minimum number of isolates per site
                       cutoff = 0.01, # the identity-by-state percentile cut off
                       nchrom = 14, # number of Plasmodium falciparum chromosomes 
                       rho = 5.833965e-07, # recombination rate per base pair based on a comparison of positions in isoRelates png_pedmap
+                      rho_av = 7.4e-7, # based on Miles, A., et al. (2016). text
+                      rho_low = 3e-7, # based on Miles, A., et al. (2016). Fig 3C
+                      rho_high = 11.5e-7, # based on Miles, A., et al. (2016). Fig 3C 
                       seed_simulate = 1) # for reproducibility
 
 attach(Magic_numbers)
@@ -40,7 +44,7 @@ sample_meta_data <- read.delim('../pf3k_data/monogenomic_samples_touse.txt', che
 sites <- names(which(table(sample_meta_data$site) > min_num)) # select sites with more than min_num isolates
 save(sites, file = '../pf3k_chimeric_data/sites.RData')
 
-#  --------------------- Extract isolates per site --------------------------
+# --------------- Extract isolates per site --------------------------
 for(site in sites){
   
   # Extract isolate names
@@ -89,7 +93,7 @@ for(site in sites){
 
 
 
-# -------------------- Calculate IBS dist per site --------------------
+# --------------- Calculate IBS distribution per site --------------------
 for(site in sites){
   
   # Reload data
@@ -110,7 +114,7 @@ for(site in sites){
 
 
 
-# --------------------  Plot IBS dist per site -------------------- 
+# --------------- Plot IBS distribution per site -------------------- 
 par(mfrow = c(length(sites),1))
 for(site in sites){
   
@@ -125,7 +129,7 @@ for(site in sites){
 }
 
 
-# -------------------- Extract unrelated sample pair names -------------------- 
+# --------------- Extract unrelated sample pair names -------------------- 
 for(site in sites){
   
   # Load IBS results
@@ -157,10 +161,10 @@ for(site in sites){
 
 
 
-# -------------- Make chimeric genotypes out of unrelated sample pairs  --------------------
+# --------------- Make chimeric genotypes out of unrelated sample pairs  --------------------
 # Load chromosome lengths in bp
-chrom_lengths <- read.csv(file = '../pf3k_data/Pf_v3_chrom_length.csv', 
-                          skip = 2, header = FALSE)
+chrom_lengths <- read.csv(file = '../pf3k_data/Pf_v3_chrom_length.csv', skip = 2, header = FALSE)
+centromeres <- read.csv(file = '../pf3k_data/Pf_v3_centromere.csv', skip = 1, header = FALSE)
 
 for(site in sites){
   
@@ -174,15 +178,17 @@ for(site in sites){
   n_snps <- nrow(site_data_biallelic_MAFplus)
   
   # Children
-  children_store <- array(dim = c(n_snps, n_children), 
-                          dimnames = list(NULL, children))
+  children_store <- array(dim = c(n_snps, n_children), dimnames = list(NULL, children))
   
   # Store to save assignment of chimeric child
   parent_assignment <- data.frame(chrom = site_data_biallelic_MAFplus[,'chrom'], 
                                   pos = site_data_biallelic_MAFplus[,'pos'], 
-                                  array(dim = c(n_snps, n_children), 
-                                        dimnames = list(NULL, children)), 
+                                  array(dim = c(n_snps, n_children), dimnames = list(NULL, children)), 
                                   check.names = FALSE) # otherwise ":" is converted to "."
+  
+  # Duplicate stores for non-uniform recom results
+  children_store_nonuniform <- children_store
+  parent_assignment_nonuniform <- parent_assignment
   
   # For each unrelated sample pair generate a chimeric child
   for(i in 1:n_children){ 
@@ -194,23 +200,30 @@ for(site in sites){
                        parent2 = site_data_biallelic_MAFplus[, unrelated[i,2]], 
                        child = NA)
     
-    # Create chimeric
-    result <- recombine(trio, rho, nchrom)
+    # Create chimeric under both uniform and nonunifrom recombinationr rates
+    result <- recombine_uniform(trio, nchrom, rho) 
+    result_nonuniform <- recombine_piecewise(trio, nchrom, rho_av, rho_low, rho_high)
     
     # Record parent assignment
     parent_assignment[, children[i]] <- result[,1]
     children_store[, children[i]] <- result[,'child']
+    parent_assignment_nonuniform[, children[i]] <- result_nonuniform[,1]
+    children_store_nonuniform[, children[i]] <- result_nonuniform[,'child']
   }
   
   # Collate genomes
   parents_children <- cbind(site_data_biallelic_MAFplus[,c('chrom', 'pos', parents)], children_store)
+  parents_children_nonuniform <- cbind(site_data_biallelic_MAFplus[,c('chrom', 'pos', parents)], children_store_nonuniform)
   
   # Save parent assignment
   save(parent_assignment, file = sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData',site))
+  save(parent_assignment_nonuniform, file = sprintf('../pf3k_chimeric_data/parent_assignment_nonuniform_%s.RData',site))
   
   # Save data set for hmmIBD
   write.table(parents_children, sep = '\t', row.names = FALSE, col.names = TRUE, quote = FALSE, 
               file = sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site))
+  write.table(parents_children_nonuniform, sep = '\t', row.names = FALSE, col.names = TRUE, quote = FALSE, 
+              file = sprintf('../pf3k_chimeric_data/parents_children_nonuniform_%s.txt', site))
   
   # Save all parent children in pedmap for isoRelate
   pedmap <- reformat_isorelate(parents_children, rho)
@@ -219,20 +232,30 @@ for(site in sites){
 
 
 
-
-# -------------- Plot average number of cross-overs per chromosome --------------
+# --------------- Plot average number of cross-overs per chromosome --------------
 par(mfrow = c(length(sites),1))
+uniform <- FALSE
 for(site in sites){
   
   # Load chimeric data 
-  load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))
-  unrelated_pairs <- colnames(parent_assignment[,-(1:2)])
-  crossovers <- array(dim = c(length(unrelated_pairs), 14), dimnames = list(unrelated_pairs, as.character(1:14)))
+  if(uniform){
+    load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))  
+  } else {
+    load(sprintf('../pf3k_chimeric_data/parent_assignment_nonuniform_%s.RData', site))  
+  }
+  
+  Z <- parent_assignment 
+  unrelated_pairs <- colnames(Z[,-(1:2)])
+  crossovers <- array(dim = c(length(unrelated_pairs), 14), 
+                      dimnames = list(unrelated_pairs, as.character(1:14)))
   
   # Extract crossovers from parent assignment
   for(i in unrelated_pairs){
-    X <- table(unique(parent_assignment[,c('chrom',i)])[,1])
-    crossovers[i, names(X)] <- X
+    for(j in 1:14){
+      ind <- Z$chrom == j
+      X <- sum(Z[ind,i][-sum(ind)] != Z[ind,i][-1])
+      crossovers[i, j] <- X 
+    }
   }
   
   # Plot
@@ -241,13 +264,109 @@ for(site in sites){
 }
 
 
+# --------------- Plot rho estimated from the data to check piecewise works -------------
+# Note that the rho estimated here is per SNP and so far exceeds rho per bp
+chrom_lengths <- read.csv(file = '../pf3k_data/Pf_v3_chrom_length.csv', skip = 2, header = FALSE)
+centromeres <- read.csv(file = '../pf3k_data/Pf_v3_centromere.csv', skip = 1, header = FALSE)
+load('../pf3k_chimeric_data/sites.RData')
+par(mfrow = c(2,1))
+for(site in sites){
+  
+  for(uniform in c(FALSE, TRUE)){
+    
+    # Load chimeric data 
+    if(uniform){
+      load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))  
+      X <- parent_assignment
+    } else {
+      load(sprintf('../pf3k_chimeric_data/parent_assignment_nonuniform_%s.RData', site)) 
+      X <- parent_assignment_nonuniform
+    }
+    
+    rho_est <- array(dim = c(14, 3, 2), dimnames = list(NULL, c('av', 'low', 'high'), c('est', 'str')))
+    
+    for(chrom in unique(X$chrom)){
+      
+      ind <- X$chrom == chrom
+      crossovers <- c(0,rowSums(apply(X[ind, -(1:2)], 2, function(x){
+        as.numeric(x[-length(x)] != x[-1])})))
+      
+      # Extract length of chromosome and centromere start and end points
+      chrom_length <- chrom_lengths[chrom,'V3']
+      centromere <- centromeres[chrom,c('V2','V3')]
+      
+      # Change points for piecewise constant function of rhos
+      c1 <- min(centromere)-120000
+      c2 <- min(centromere)-80000
+      c3 <- min(centromere)-30000
+      c4 <- min(centromere)
+      c5 <- max(centromere)
+      c6 <- max(centromere)+30000
+      c7 <- max(centromere)+80000
+      c8 <- max(centromere)+120000
+      
+      ind_high <- X[ind, 'pos'] %in% c(c1:c2, c7:c8)
+      ind_low <- X[ind, 'pos'] %in% c(c3:c4, c5:c6)
+      ind_av <- (!ind_high & !ind_low)   
+      unique(ind_high + ind_low + ind_av) # Check all covered
+      
+      rho_est[chrom, 'high', 'est'] <- mean(crossovers[ind_high])
+      rho_est[chrom, 'low', 'est'] <- mean(crossovers[ind_low])
+      rho_est[chrom, 'av', 'est'] <- mean(crossovers[ind_av])
+      rho_est[chrom, 'high', 'str'] <- sd(crossovers[ind_high])/sqrt(sum(ind_high)) 
+      rho_est[chrom, 'low', 'str'] <- sd(crossovers[ind_low])/sqrt(sum(ind_low)) 
+      rho_est[chrom, 'av', 'str'] <- sd(crossovers[ind_av])/sqrt(sum(ind_av)) 
+    }
+    
+    X <- barplot(colMeans(rho_est[,,'est']), ylim = c(0,max(rho_est)))
+    
+    # Add +/- standard error
+    segments(x0 = X[,1], x1 = X[,1], 
+             y0 = colMeans(rho_est[,,'est']) - colMeans(rho_est[,,'str']), 
+             y1 = colMeans(rho_est[,,'est']) + colMeans(rho_est[,,'str'])) 
+  }
+}
 
-# ----------- Copy chimeric children adding genotyping error ------------
+
+
+
+
+# --------------- Plot positions of cross-overs --------------
+for(site in sites){
+  
+  for(uniform in c(FALSE, TRUE)){
+    
+    # Load chimeric data 
+    if(uniform){
+      load(sprintf('../pf3k_chimeric_data/parent_assignment_%s.RData', site))  
+      Z <- parent_assignment
+    } else {
+      load(sprintf('../pf3k_chimeric_data/parent_assignment_nonuniform_%s.RData', site)) 
+      Z <- parent_assignment_nonuniform
+    }
+    
+    Z[Z == 'parent1'] <- 1
+    Z[Z == 'parent2'] <- 0
+    par(mfrow = c(14,1), mar = c(0,0,0,0))
+    for(chrom in 1:14){
+      ind <- Z$chrom == chrom
+      plot(NULL, ylim = c(0,1), xlim = range(Z[ind,'pos']), xaxt = 'n', yaxt = 'n')
+      polygon(x = rep(centromeres[chrom,c('V2', 'V3')], each = 2), y = c(0,0,1,1), 
+              col = 'lightgray')
+      for(i in 3:ncol(Z)){
+        lines(y = as.numeric(Z[ind, i]),x = Z[ind,'pos'], col = 'blue')
+      }
+    }
+  }
+}
+
+
+# --------------- Copy chimeric children adding genotyping error ------------
 rm(list = ls())
 source(file = './functions.R') # functions
 load('../pf3k_chimeric_data/sites.RData')
 load('../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
-Magic_numbers$error_prob <- 0.005
+Magic_numbers$error_prob <- 0.005 # Update error prob
 attach(Magic_numbers, warn.conflicts = FALSE)
 # Resave 
 save(Magic_numbers, file = '../pf3k_chimeric_data/Simulate_chimeric_genotypes_Magic_numbers.RData')
@@ -266,7 +385,7 @@ for(site in sites){
   copied_SNPData_missing <- copied_SNPData == -1
   copied_SNPData[!copied_SNPData_missing] <- genotyping_error(copied_SNPData[!copied_SNPData_missing], seed = 1)
   
-  # as.integer prevents SNP no. 11231 of Thies being recorder in scientific notation 
+  # as.integer prevents SNP no. 11231 of Thies being recorded in scientific notation 
   parents_children <- apply(cbind(copied[,1:2], copied_SNPData), 2, as.integer)
   
   # Save for hmmIBD
@@ -276,21 +395,21 @@ for(site in sites){
   
   # Save all parent children in pedmap for isoRelate
   pedmap <- reformat_isorelate(parents_children, rho)
-  save(pedmap, file = sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.RData',
-                              site))
+  save(pedmap, file = sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.RData',site))
   
 }
 
 # Compare erroneous and non-erroneus to ensure error rate as expected
 for(site in sites){
   non_erroneous <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s.txt', site), 
-                                 header = TRUE, sep = '\t', check.names=FALSE))
-  erroneous <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.txt', site), 
                                         header = TRUE, sep = '\t', check.names=FALSE))
-  
+  erroneous <- as.matrix(read.table(sprintf('../pf3k_chimeric_data/parents_children_%s_erroneous.txt', site), 
+                                    header = TRUE, sep = '\t', check.names=FALSE))
   print(1-mean(non_erroneous[, -(1:2)] == erroneous[, -(1:2)], na.rm = TRUE))
 }
 toc()
+
+
 
 
 
