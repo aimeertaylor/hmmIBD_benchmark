@@ -1,6 +1,6 @@
 ############################################################################
 # Script to extract and post-process both isoRelate and hmmIBD results
-# Takes approx XXXX sec to run 
+# Takes approx. 400 sec to run 
 ############################################################################
 rm(list = ls())
 require(tictoc)

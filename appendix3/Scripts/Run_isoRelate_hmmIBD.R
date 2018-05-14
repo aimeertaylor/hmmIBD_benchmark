@@ -3,7 +3,7 @@
 # Since, it is not possible to specify comparisons to analyse under isoRelate, 
 # all possible pairwise comparisons of the children and their parents were analysed. 
 # It is possible to filter by comparisons under hmmIBD, via b_site.txt file.
-# In total takes around 9 hours without timing experiments (plus ~ 5 to do timiming experiments)
+# In total takes around 9.5 hours without timing experiments (plus ~ 5 to do timiming experiments)
 ############################################################################
 
 # -------------------- Set up -------------------- 
@@ -152,7 +152,7 @@ names(time_my_ibd) <- paste(rep(sites, each = Magic_numbers$n_timing_repetition)
 for(site in sites){
   for(i in 1:Magic_numbers$n_timing_repetition){
     time_my_ibd[[paste(site, i)]] <- system.time(
-      system(sprintf('../HMM/hmmIBD -i ../pf3k_chimeric_data/hmmIBD_timing_input_%s_%s.txt -f ../pf3k_chimeric_data/pf3k_data_biallelic_frequencies_%s.txt -o hmmIBD_timing_output_%s_%s && mv ./hmmIBD_timing_output_* ../pf3k_chimeric_data/',
+      system(sprintf('../HMM/hmmIBD_isoRelate_rho -i ../pf3k_chimeric_data/hmmIBD_timing_input_%s_%s.txt -f ../pf3k_chimeric_data/pf3k_data_biallelic_frequencies_%s.txt -o hmmIBD_timing_output_%s_%s && mv ./hmmIBD_timing_output_* ../pf3k_chimeric_data/',
                      site, i, site, site, i, site, i)))
   }
 }
